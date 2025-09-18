@@ -1,4 +1,4 @@
-from typing import Annotated, AsyncGenerator, Optional
+from typing import Annotated, AsyncGenerator, Optional, Literal
 
 from fastapi import Depends, FastAPI, status, Response, HTTPException
 from pydantic import BaseModel, HttpUrl, Field
@@ -7,6 +7,7 @@ import uuid
 import os
 import httpx
 from background_tasks.summarizer import summarize_with_gemma3, SummarizationError
+import asyncio
 
 
 app = FastAPI(title="LLM Summariser Service", version="0.1.0")
@@ -30,7 +31,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentResponse(BaseModel):
     document_uuid: str
-    status: str
+    status: Literal["PENDING", "SUCCESS", "FAILED"]
     name: str
     URL: HttpUrl
     summary: Optional[str] = None
@@ -68,7 +69,7 @@ response:Response,
     }
 
     await redis.hset(hash_key, mapping=fields)
-    response.headers["Location"] = f"/documents/{document_uuid}"
+    response.headers["Location"] = app.url_path_for("get_document", document_uuid=document_uuid)
 
     async def process_document() -> None:
         try:
@@ -86,7 +87,7 @@ response:Response,
                 fetch_resp.raise_for_status()
                 content_text = fetch_resp.text
 
-            summary_text = summarize_with_gemma3(content_text)
+            summary_text = await asyncio.to_thread(summarize_with_gemma3, content_text)
 
             await redis.hset(hash_key, mapping={
                 "status": "SUCCESS",
@@ -123,10 +124,13 @@ redis: Annotated[Redis, Depends(get_redis)]) -> DocumentResponse:
     summary_value = data.get("summary")
     summary_normalized = None if summary_value in (None, "") else summary_value
 
+    if "URL" not in data or "name" not in data or "status" not in data:
+        raise HTTPException(status_code=500, detail="Corrupt document record")
+
     return DocumentResponse(
-        document_uuid=document_uuid,
-        status=data.get("status", "PENDING"),
-        name=data.get("name", ""),
-        URL=data.get("URL", ""),
-        summary=summary_normalized,
+       document_uuid=document_uuid,
+       status=data["status"],
+       name=data["name"],
+       URL=data["URL"],
+       summary=summary_normalized,
     )

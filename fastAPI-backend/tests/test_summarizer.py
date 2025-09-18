@@ -31,15 +31,17 @@ def test_summarize_with_gemma3_calls_ollama_with_cleaned_text(monkeypatch: pytes
         assert "<script>" not in prompt
         assert "var a=1" not in prompt
         assert "Title & Intro" in prompt
-        return {"response": "- Bullet 1\n- Bullet 2"}
+        return {"response": "Title & Intro is discussed. Content is summarized in prose, not bullets."}
 
     monkeypatch.setattr(summarizer.ollama, "generate", fake_generate)  # type: ignore[arg-type]
 
-    html = "<h1>Title &amp; Intro</h1><script>var a=1</script><p>Content</p>"
+    # Provide sufficient readable words to avoid early "Insufficient" return
+    long_body = " ".join(["content"] * 40)
+    html = f"<h1>Title &amp; Intro</h1><script>var a=1</script><p>{long_body}</p>"
     out = summarizer.summarize_with_gemma3(html, max_chars=1000, model="gemma3:1b")
 
-    assert out.startswith("-")
-    assert captured["model"] == "gemma3:1b"
+    assert out.endswith(".")
+    assert captured.get("model") == "gemma3:1b"
     assert "Task: Write a clear multi-paragraph summary" in captured["prompt"]
 
 
