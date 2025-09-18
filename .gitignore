@@ -1,0 +1,67 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+.env
+.env.*
+.python-version
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# Type checkers and linters
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# Project caches
+.cache/
+
+# Editors/IDEs
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# Docker/containers (optional)
+docker-data/
+.docker/
+docker/volumes/
+docker-compose.override.yml
+compose.override.yaml
+compose.override.yml
+
+# Local env variations
+.env.local
+.env.development
+.env.production
+.env.test
+.envrc
+.direnv/
+
+# Secrets (keep out of VCS)
+.secrets
+secrets.*

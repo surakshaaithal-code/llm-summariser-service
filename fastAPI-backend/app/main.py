@@ -1,9 +1,10 @@
-from typing import AsyncGenerator, Optional
+from typing import Annotated, AsyncGenerator, Optional
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, status,Response
 from pydantic import BaseModel, HttpUrl, Field
 from redis.asyncio import Redis
 import uuid
+import os
 
 
 app = FastAPI(title="LLM Summariser Service", version="0.1.0")
@@ -35,7 +36,13 @@ class DocumentResponse(BaseModel):
 
 # Redis dependency
 async def get_redis() -> AsyncGenerator[Redis, None]:
-    redis = Redis.from_url("redis://localhost:6379", encoding="utf-8", decode_responses=True)
+    redis = Redis.from_url(
+        os.getenv("REDIS_URL", "redis://localhost:6379"),
+        encoding="utf-8",
+        decode_responses=True,
+        socket_connect_timeout=2.0,
+        socket_timeout=2.0,
+    )
     try:
         yield redis
     finally:
@@ -43,7 +50,10 @@ async def get_redis() -> AsyncGenerator[Redis, None]:
 
 
 @app.post("/documents/", status_code=status.HTTP_202_ACCEPTED, response_model=DocumentResponse)
-async def create_document(payload: DocumentCreate, redis: Redis = Depends(get_redis)) -> DocumentResponse:
+async def create_document(payload: DocumentCreate, 
+redis: Annotated[Redis, Depends(get_redis)],
+response:Response,
+) -> DocumentResponse:
     document_uuid = str(uuid.uuid4())
 
     # Prepare fields to store in Redis hash
@@ -56,6 +66,7 @@ async def create_document(payload: DocumentCreate, redis: Redis = Depends(get_re
     }
 
     await redis.hset(hash_key, mapping=fields)
+    response.headers["Location"] = f"/documents/{document_uuid}"
 
     return DocumentResponse(
         document_uuid=document_uuid,

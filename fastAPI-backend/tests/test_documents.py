@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional
-
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 
@@ -48,20 +48,17 @@ def test_create_document_success(client):
     assert data["summary"] is None
 
     # validate UUID format (basic check: contains 4 dashes and hex chars length)
-    assert isinstance(data["document_uuid"], str) and data["document_uuid"].count("-") == 4
-
+   # strict UUID validation
+    assert uuid.UUID(data["document_uuid"])
     # ensure Redis hset was called with expected values
     assert fake.last_hset_args is not None
     assert fake.last_hset_args["key"].startswith("document:")
     stored = fake.last_hset_args["mapping"]
-    assert stored == {
-        "status": "PENDING",
-        "name": payload["name"],
-        "URL": expected_url,
-        "summary": "",
-    }
-
-
+    assert stored["status"] == "PENDING"
+    assert stored["name"] == payload["name"]
+    assert stored["URL"] == expected_url
+    assert stored["summary"] == ""
+    
 def test_create_document_validation_error(client):
     c, _ = client
     # invalid URL
