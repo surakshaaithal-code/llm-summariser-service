@@ -9,10 +9,15 @@ from app.main import app, get_redis
 class FakeRedis:
     def __init__(self) -> None:
         self.last_hset_args: Optional[Dict[str, Any]] = None
+        self.hashes: Dict[str, Dict[str, Any]] = {}
 
     async def hset(self, key: str, mapping: Dict[str, Any]) -> int:
         self.last_hset_args = {"key": key, "mapping": mapping}
+        self.hashes[key] = dict(mapping)
         return 1
+
+    async def hgetall(self, key: str) -> Dict[str, Any]:
+        return dict(self.hashes.get(key, {}))
 
     async def aclose(self) -> None:
         return None
@@ -65,4 +70,33 @@ def test_create_document_validation_error(client):
     payload = {"name": "Example Doc", "URL": "not-a-url"}
     resp = c.post("/documents/", json=payload)
     assert resp.status_code == 422
+
+
+def test_get_document_success(client):
+    c, fake = client
+    payload = {"name": "Doc", "URL": "https://example.org"}
+
+    # First create
+    resp = c.post("/documents/", json=payload)
+    assert resp.status_code == 202
+    created = resp.json()
+    doc_uuid = created["document_uuid"]
+
+    # Now fetch
+    resp2 = c.get(f"/documents/{doc_uuid}/")
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data["document_uuid"] == doc_uuid
+    assert data["status"] == "PENDING"
+    assert data["name"] == payload["name"]
+    expected_url = payload["URL"] + "/" if not payload["URL"].endswith("/") else payload["URL"]
+    assert data["URL"] == expected_url
+    assert data["summary"] is None
+
+
+def test_get_document_not_found(client):
+    c, _ = client
+    resp = c.get("/documents/00000000-0000-0000-0000-000000000000/")
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Document not found"
 
