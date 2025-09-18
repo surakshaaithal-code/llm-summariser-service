@@ -101,7 +101,8 @@ response:Response,
 
     # fire-and-forget background work
     import asyncio
-    asyncio.create_task(process_document())
+    task = asyncio.create_task(process_document())
+
 
     return DocumentResponse(
         document_uuid=document_uuid,

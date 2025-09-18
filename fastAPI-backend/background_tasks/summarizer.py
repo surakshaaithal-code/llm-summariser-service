@@ -4,7 +4,7 @@ import os
 from typing import Optional
 import re
 import html as html_lib
-
+from ollama import Client
 import ollama
 
 
@@ -98,11 +98,9 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
     if not isinstance(text, str) or not text.strip():
         raise SummarizationError(SummarizationError.EMPTY_INPUT)
 
-    # Ensure Ollama client points to the correct host
+    # Bind the Ollama client to the configured host (no global env mutation)
     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    # The official client reads OLLAMA_HOST env var internally. Set it explicitly.
-    os.environ["OLLAMA_HOST"] = ollama_host
-
+    client = Client(host=ollama_host)
     cleaned = _extract_readable_text(text)
     if not cleaned or len(cleaned.split()) < 20:
         return "Insufficient article content to summarize."
