@@ -123,7 +123,7 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
     )
 
     try:
-        response = ollama.generate(model=model, prompt=prompt, options={"temperature": 0.2})
+        response = client.generate(model=model, prompt=prompt, options={"temperature": 0.2})
     except Exception as exc:  # noqa: BLE001 - surface any client/network error
         raise SummarizationError(SummarizationError.OLLAMA_FAILED) from exc
 
