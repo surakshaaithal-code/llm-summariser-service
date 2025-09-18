@@ -100,7 +100,6 @@ response:Response,
             })
 
     # fire-and-forget background work
-    import asyncio
     task = asyncio.create_task(process_document())
 
 
