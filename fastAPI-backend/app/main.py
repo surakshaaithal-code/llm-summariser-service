@@ -1,10 +1,13 @@
-from typing import Annotated, AsyncGenerator, Optional
+from typing import Annotated, AsyncGenerator, Optional, Literal
 
-from fastapi import Depends, FastAPI, status,Response
+from fastapi import Depends, FastAPI, status, Response, HTTPException
 from pydantic import BaseModel, HttpUrl, Field
 from redis.asyncio import Redis
 import uuid
 import os
+import httpx
+from background_tasks.summarizer import summarize_with_gemma3, SummarizationError
+import asyncio
 
 
 app = FastAPI(title="LLM Summariser Service", version="0.1.0")
@@ -28,7 +31,7 @@ class DocumentCreate(BaseModel):
 
 class DocumentResponse(BaseModel):
     document_uuid: str
-    status: str
+    status: Literal["PENDING", "SUCCESS", "FAILED"]
     name: str
     URL: HttpUrl
     summary: Optional[str] = None
@@ -66,7 +69,40 @@ response:Response,
     }
 
     await redis.hset(hash_key, mapping=fields)
-    response.headers["Location"] = f"/documents/{document_uuid}"
+    response.headers["Location"] = app.url_path_for("get_document", document_uuid=document_uuid)
+
+    async def process_document() -> None:
+        try:
+            async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+                fetch_resp = await client.get(
+                    str(payload.URL),
+                    headers={
+                        "User-Agent": (
+                            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                            "AppleWebKit/537.36 (KHTML, like Gecko) "
+                            "Chrome/125.0.0.0 Safari/537.36"
+                        )
+                    },
+                )
+                fetch_resp.raise_for_status()
+                content_text = fetch_resp.text
+
+            summary_text = await asyncio.to_thread(summarize_with_gemma3, content_text)
+
+            await redis.hset(hash_key, mapping={
+                "status": "SUCCESS",
+                "summary": summary_text,
+            })
+        except (httpx.HTTPError, SummarizationError, Exception):
+            await redis.hset(hash_key, mapping={
+                "status": "FAILED",
+                "summary": "",
+            })
+
+    # fire-and-forget background work
+    import asyncio
+    task = asyncio.create_task(process_document())
+
 
     return DocumentResponse(
         document_uuid=document_uuid,
@@ -74,4 +110,28 @@ response:Response,
         name=payload.name,
         URL=payload.URL,
         summary=None,
+    )
+
+
+@app.get("/documents/{document_uuid}/", response_model=DocumentResponse)
+async def get_document(document_uuid: str, 
+redis: Annotated[Redis, Depends(get_redis)]) -> DocumentResponse:
+    hash_key = f"document:{document_uuid}"
+    data = await redis.hgetall(hash_key)
+
+    if not data:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    summary_value = data.get("summary")
+    summary_normalized = None if summary_value in (None, "") else summary_value
+
+    if "URL" not in data or "name" not in data or "status" not in data:
+        raise HTTPException(status_code=500, detail="Corrupt document record")
+
+    return DocumentResponse(
+       document_uuid=document_uuid,
+       status=data["status"],
+       name=data["name"],
+       URL=data["URL"],
+       summary=summary_normalized,
     )
