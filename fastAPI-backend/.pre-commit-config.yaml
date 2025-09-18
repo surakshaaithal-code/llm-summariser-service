@@ -1,0 +1,26 @@
+repos:
+  - repo: https://github.com/psf/black
+    rev: 25.1.0
+    hooks:
+      - id: black
+        name: black (fastapi-backend)
+        language_version: python3.12
+        args: ["--line-length", "88"]
+        files: ^FastAPI-Backend/
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.18.1
+    hooks:
+      - id: mypy
+        name: mypy (fastapi-backend)
+        args: ["--config-file", "fastAPI-Backend/pyproject.toml"]
+        files: ^FastAPI-Backend/
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest (fastapi-backend)
+        entry: bash -c 'poetry -C fastAPI-Backend run pytest -q || [ $? -eq 5 ]'
+        language: system
+        pass_filenames: false
+        always_run: true

@@ -1,0 +1,58 @@
+# VCS
+.git
+.gitignore
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual envs
+.venv/
+venv/
+.direnv/
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Build/artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Testing and coverage
+.pytest_cache/
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+
+# Type checker caches
+.mypy_cache/
+.pyre/
+.ruff_cache/
+.cache/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Local env and secrets
+.env
+.env.*
+.secrets
+secrets.*
+
+# Docker local data
+.docker/
+docker-data/
+docker/volumes/
+
+# Project-specific (exclude repo-level tests from build context)
+fastAPI-backend/tests/
