@@ -191,7 +191,7 @@ response:Response,
             # 50% - about to start summarization
             await redis.hset(hash_key, mapping={"data_progress": "0.50"})
 
-            summary_text = await asyncio.to_thread(summarize_with_gemma3, content_text)
+            summary_text = await summarize_with_gemma3(content_text)
 
             # 75% - summarization complete, about to store
             await redis.hset(hash_key, mapping={"data_progress": "0.75"})
