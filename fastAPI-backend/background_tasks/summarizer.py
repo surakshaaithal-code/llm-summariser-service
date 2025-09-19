@@ -4,8 +4,8 @@ import os
 from typing import Optional
 import re
 import html as html_lib
-from ollama import Client
-import ollama
+import httpx
+import json
 
 
 class SummarizationError(Exception):
@@ -87,7 +87,7 @@ def _finalize_summary_text(text: str, *, max_words: int | None = 1500) -> str:
     return normalized
 
 
-def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gemma3:1b") -> str:
+async def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gemma3:1b") -> str:
     """
     Summarize the given text using the local Ollama model Gemma3:1B.
 
@@ -98,9 +98,8 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
     if not isinstance(text, str) or not text.strip():
         raise SummarizationError(SummarizationError.EMPTY_INPUT)
 
-    # Bind the Ollama client to the configured host (no global env mutation)
+    # Get the Ollama host from environment
     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    client = Client(host=ollama_host)
     cleaned = _extract_readable_text(text)
     if not cleaned or len(cleaned.split()) < 20:
         return "Insufficient article content to summarize."
@@ -122,16 +121,37 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
         "Summary:"
     )
 
+    # Prepare the request payload for Ollama API
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "options": {"temperature": 0.2}
+    }
+
     try:
-        response = client.generate(model=model, prompt=prompt, options={"temperature": 0.2})
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                f"{ollama_host}/api/generate",
+                json=payload,
+                headers={"Content-Type": "application/json"}
+            )
+            response.raise_for_status()
+            
+            # Ollama's generate API returns a streaming response, so we need to collect all chunks
+            output = ""
+            async for line in response.aiter_lines():
+                if line.strip():
+                    try:
+                        chunk_data = json.loads(line)
+                        if "response" in chunk_data:
+                            output += chunk_data["response"]
+                    except json.JSONDecodeError:
+                        continue  # Skip malformed JSON lines
+                        
     except Exception as exc:  # noqa: BLE001 - surface any client/network error
         raise SummarizationError(SummarizationError.OLLAMA_FAILED) from exc
 
-    # Response schema: { 'model': str, 'created_at': str, 'response': str, ... }
-    output: Optional[str] = None
-    if isinstance(response, dict):
-        output = response.get("response", "")
-    output = (output or "").strip()
+    output = output.strip()
     if not output:
         raise SummarizationError(SummarizationError.EMPTY_OUTPUT)
 

@@ -9,20 +9,22 @@ WORKDIR /app
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry
 ENV POETRY_VERSION=2.2.0 \
     POETRY_HOME=/opt/poetry
 RUN curl -sSL https://install.python-poetry.org | python3 - --yes && \
-    ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+    ln -sf /opt/poetry/bin/poetry /usr/local/bin/poetry
 
 # Copy only pyproject files first for better caching
 COPY pyproject.toml poetry.lock* ./
 
 # Configure Poetry to not create virtualenvs inside Docker
-RUN poetry config virtualenvs.create false && \
-    poetry install --no-interaction --no-ansi --no-root
+RUN /opt/poetry/bin/poetry config virtualenvs.create false && \
+    /opt/poetry/bin/poetry install --no-interaction --no-ansi --no-root
 
 # Copy the rest of the application
 COPY . .
