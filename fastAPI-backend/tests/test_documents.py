@@ -45,12 +45,13 @@ def test_create_document_success(client):
     assert resp.status_code == 202
     data = resp.json()
 
-    assert set(data.keys()) == {"document_uuid", "status", "name", "URL", "summary"}
+    assert set(data.keys()) == {"document_uuid", "status", "name", "URL", "summary", "data_progress"}
     assert data["status"] == "PENDING"
     assert data["name"] == payload["name"]
     expected_url = payload["URL"] if payload["URL"].endswith("/") else payload["URL"] + "/"
     assert data["URL"] == expected_url
     assert data["summary"] is None
+    assert data["data_progress"] == 0.0
 
     # validate UUID format (basic check: contains 4 dashes and hex chars length)
    # strict UUID validation
@@ -92,6 +93,7 @@ def test_get_document_success(client):
     expected_url = payload["URL"] + "/" if not payload["URL"].endswith("/") else payload["URL"]
     assert data["URL"] == expected_url
     assert data["summary"] is None
+    assert data["data_progress"] == 0.0
 
 
 def test_get_document_not_found(client):

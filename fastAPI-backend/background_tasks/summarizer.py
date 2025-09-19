@@ -98,7 +98,7 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
     if not isinstance(text, str) or not text.strip():
         raise SummarizationError(SummarizationError.EMPTY_INPUT)
 
-    # Bind the Ollama client to the configured host (no global env mutation)
+    # Bind the Ollama client to the configured host (keep for compatibility/DI)
     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     client = Client(host=ollama_host)
     cleaned = _extract_readable_text(text)
@@ -123,7 +123,7 @@ def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str = "gem
     )
 
     try:
-        response = client.generate(model=model, prompt=prompt, options={"temperature": 0.2})
+        response = ollama.generate(model=model, prompt=prompt, options={"temperature": 0.2})
     except Exception as exc:  # noqa: BLE001 - surface any client/network error
         raise SummarizationError(SummarizationError.OLLAMA_FAILED) from exc
 

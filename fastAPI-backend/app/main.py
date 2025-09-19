@@ -35,6 +35,7 @@ class DocumentResponse(BaseModel):
     name: str
     URL: HttpUrl
     summary: Optional[str] = None
+    data_progress: float = 0.0
 
 
 # Redis dependency
@@ -66,6 +67,7 @@ response:Response,
         "name": payload.name,
         "URL": str(payload.URL),
         "summary": "",  # store empty string to represent null
+        "data_progress": "0.0",
     }
 
     await redis.hset(hash_key, mapping=fields)
@@ -86,17 +88,27 @@ response:Response,
                 )
                 fetch_resp.raise_for_status()
                 content_text = fetch_resp.text
+            # 25% - content fetched
+            await redis.hset(hash_key, mapping={"data_progress": "0.25"})
+
+            # 50% - about to start summarization
+            await redis.hset(hash_key, mapping={"data_progress": "0.50"})
 
             summary_text = await asyncio.to_thread(summarize_with_gemma3, content_text)
+
+            # 75% - summarization complete, about to store
+            await redis.hset(hash_key, mapping={"data_progress": "0.75"})
 
             await redis.hset(hash_key, mapping={
                 "status": "SUCCESS",
                 "summary": summary_text,
+                "data_progress": "1.0",
             })
         except (httpx.HTTPError, SummarizationError, Exception):
             await redis.hset(hash_key, mapping={
                 "status": "FAILED",
                 "summary": "",
+                "data_progress": "1.0",
             })
 
     # fire-and-forget background work
@@ -109,6 +121,7 @@ response:Response,
         name=payload.name,
         URL=payload.URL,
         summary=None,
+        data_progress=0.0,
     )
 
 
@@ -123,6 +136,11 @@ redis: Annotated[Redis, Depends(get_redis)]) -> DocumentResponse:
 
     summary_value = data.get("summary")
     summary_normalized = None if summary_value in (None, "") else summary_value
+    progress_raw = data.get("data_progress", "0.0")
+    try:
+        progress_value = float(progress_raw)
+    except (TypeError, ValueError):
+        progress_value = 0.0
 
     if "URL" not in data or "name" not in data or "status" not in data:
         raise HTTPException(status_code=500, detail="Corrupt document record")
@@ -133,4 +151,5 @@ redis: Annotated[Redis, Depends(get_redis)]) -> DocumentResponse:
        name=data["name"],
        URL=data["URL"],
        summary=summary_normalized,
+       data_progress=progress_value,
     )
