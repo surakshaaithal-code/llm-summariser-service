@@ -12,7 +12,6 @@ Run with: pytest tests/test_integration_concurrency.py -v
 import asyncio
 import httpx
 import pytest
-import pytest_asyncio
 import time
 from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
