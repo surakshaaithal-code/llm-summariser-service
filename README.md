@@ -396,7 +396,7 @@ The integration tests (`test_integration_concurrency.py`) include:
 
 ### Test URLs
 
-The integration tests use real URLs from [Moon & Honey Travel](https://www.moonhoneytravel.com):
+The integration tests use real URLs from [Moon & Honey Travel](https://www.moonhoneytravel.com)(Just my favorite blog for hiking inspiration):
 - Homepage and about page
 - Country-specific travel guides (Dolomites, Slovenia, Austria, Switzerland, Italy, Spain, Portugal, Montenegro)
 
