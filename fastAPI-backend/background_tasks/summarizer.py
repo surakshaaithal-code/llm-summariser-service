@@ -129,7 +129,7 @@ async def summarize_with_gemma3(text: str, *, max_chars: int = 1500, model: str 
     }
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             response = await client.post(
                 f"{ollama_host}/api/generate",
                 json=payload,

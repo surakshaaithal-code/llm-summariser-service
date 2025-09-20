@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   api:
     image: surakshaaithal241994/llm-summariser-service:latest
