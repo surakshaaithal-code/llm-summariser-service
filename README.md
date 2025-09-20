@@ -18,6 +18,10 @@ FastAPI-based asynchronous web service that summarizes text content from URLs us
    ```bash
    docker compose up -d --build
    ```
+   or for pre-built images
+   ```bash
+   docker compose up -d
+   ```
 
 2. **Access the API**:
    - API Base URL: `http://localhost:8000`
