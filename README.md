@@ -98,6 +98,186 @@ Response (when complete):
 
 ## Architecture
 
+### System Overview
+
+The LLM Summarizer Service is built with a microservices architecture using Docker Compose, featuring asynchronous processing, real-time progress tracking, and robust error handling.
+
+### High-Level System Architecture
+
+```mermaid
+graph TB
+    subgraph "Client Layer"
+        Client[👤 Client Application]
+        Browser[🌐 Web Browser]
+    end
+    
+    subgraph "Docker Compose Network"
+        subgraph "API Service"
+            FastAPI[🚀 FastAPI Backend<br/>Port 8000]
+        end
+        
+        subgraph "Data Layer"
+            Redis[(🗄️ Redis<br/>Port 6379)]
+        end
+        
+        subgraph "AI Service"
+            Ollama[🤖 Ollama LLM<br/>Port 11434]
+            Model[🧠 Gemma3:1B Model]
+        end
+        
+        subgraph "Init Service"
+            OllamaInit[⚡ Ollama Init<br/>One-time setup]
+        end
+    end
+    
+    subgraph "External Services"
+        WebContent[🌍 Web Content<br/>HTTP/HTTPS URLs]
+    end
+    
+    %% Client connections
+    Client -->|HTTP REST API| FastAPI
+    Browser -->|Interactive Docs| FastAPI
+    
+    %% Internal service connections
+    FastAPI -->|Store/Retrieve Job State| Redis
+    FastAPI -->|Generate Summaries| Ollama
+    Ollama -->|Host Model| Model
+    OllamaInit -->|Pull Model| Ollama
+    
+    %% External connections
+    FastAPI -->|Fetch Content| WebContent
+    
+    %% Styling
+    classDef clientStyle fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef apiStyle fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef dataStyle fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef aiStyle fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef externalStyle fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class Client,Browser clientStyle
+    class FastAPI apiStyle
+    class Redis dataStyle
+    class Ollama,Model,OllamaInit aiStyle
+    class WebContent externalStyle
+```
+
+### Data Flow Architecture
+
+```mermaid
+flowchart TD
+    subgraph "Request Flow"
+        A[📝 Client POST /documents/] --> B[🔍 Validate Input]
+        B --> C[🆔 Generate UUID]
+        C --> D[💾 Store in Redis<br/>Status: PENDING<br/>Progress: 0.0]
+        D --> E[✅ Return 202 Accepted]
+        E --> F[⚡ Start Background Task]
+    end
+    
+    subgraph "Background Processing"
+        F --> G[🌐 Fetch Web Content<br/>Progress: 25%]
+        G --> H[📄 Extract Text Content]
+        H --> I[🤖 Send to Ollama API<br/>Progress: 50%]
+        I --> J[📝 Generate Summary<br/>Progress: 75%]
+        J --> K[💾 Store Result in Redis<br/>Progress: 100%]
+    end
+    
+    subgraph "Polling Flow"
+        L[🔄 Client GET /documents/uuid/] --> M[🔍 Query Redis]
+        M --> N{Status?}
+        N -->|PENDING| O[📈 Return Progress]
+        N -->|SUCCESS| P[📄 Return Summary]
+        N -->|FAILED| Q[❌ Return Error]
+    end
+    
+    subgraph "Data Storage"
+        R[(🗄️ Redis Hash Structure<br/>document:uuid)]
+        S[📋 Fields:<br/>• status<br/>• name<br/>• URL<br/>• summary<br/>• data_progress]
+    end
+    
+    %% Connections
+    D --> R
+    K --> R
+    M --> R
+    R --> S
+    
+    %% Styling
+    classDef requestStyle fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
+    classDef processStyle fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef pollStyle fill:#fff8e1,stroke:#f57f17,stroke-width:2px
+    classDef storageStyle fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    
+    class A,B,C,D,E,F requestStyle
+    class G,H,I,J,K processStyle
+    class L,M,N,O,P,Q pollStyle
+    class R,S storageStyle
+```
+
+### Asynchronous Workflow Sequence
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant FastAPI as 🚀 FastAPI API
+    participant Redis as 🗄️ Redis Store
+    participant WebContent as 🌍 Web Content
+    participant Ollama as 🤖 Ollama LLM
+    
+    Note over Client,Ollama: Document Submission & Processing Workflow
+    
+    %% Initial submission
+    Client->>+FastAPI: POST /documents/<br/>name, URL
+    FastAPI->>FastAPI: Generate UUID
+    FastAPI->>+Redis: HSET document:uuid<br/>status: PENDING, progress: 0.0
+    Redis-->>-FastAPI: OK
+    FastAPI-->>-Client: 202 Accepted<br/>document_uuid, status: PENDING
+    
+    Note over FastAPI: Background Task Starts
+    
+    %% Background processing
+    FastAPI->>+WebContent: GET URL<br/>User-Agent: Mozilla/5.0...
+    WebContent-->>-FastAPI: HTML Content
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.25
+    Redis-->>-FastAPI: OK
+    
+    FastAPI->>FastAPI: Extract readable text<br/>from HTML
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.50
+    Redis-->>-FastAPI: OK
+    
+    FastAPI->>+Ollama: POST /api/generate<br/>model: gemma3:1b, prompt
+    Ollama-->>-FastAPI: Streaming Summary
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.75
+    Redis-->>-FastAPI: OK
+    
+    FastAPI->>FastAPI: Finalize summary text
+    FastAPI->>+Redis: HSET document:uuid<br/>status: SUCCESS, summary, progress: 1.0
+    Redis-->>-FastAPI: OK
+    
+    Note over Client,Ollama: Client Polling for Results
+    
+    %% Polling sequence
+    loop Polling Loop
+        Client->>+FastAPI: GET /documents/uuid/
+        FastAPI->>+Redis: HGETALL document:uuid
+        Redis-->>-FastAPI: Document Data
+        FastAPI-->>-Client: Document Status<br/>status, progress, summary
+        
+        alt Status = PENDING
+            Note over Client: Wait and retry
+        else Status = SUCCESS
+            Note over Client: Summary available
+        else Status = FAILED
+            Note over Client: Processing failed
+        end
+    end
+    
+    Note over Client,Ollama: Error Handling
+    
+    alt Network/Processing Error
+        FastAPI->>+Redis: HSET document:uuid<br/>status: FAILED, progress: 1.0
+        Redis-->>-FastAPI: OK
+    end
+```
+
 ### Services
 
 - **FastAPI Backend**: Main API service running on port 8000
@@ -216,7 +396,7 @@ The integration tests (`test_integration_concurrency.py`) include:
 
 ### Test URLs
 
-The integration tests use real URLs from [Moon & Honey Travel](https://www.moonhoneytravel.com):
+The integration tests use real URLs from [Moon & Honey Travel](https://www.moonhoneytravel.com)(Just my favorite blog for hiking inspiration):
 - Homepage and about page
 - Country-specific travel guides (Dolomites, Slovenia, Austria, Switzerland, Italy, Spain, Portugal, Montenegro)
 
