@@ -182,7 +182,7 @@ flowchart TD
     end
     
     subgraph "Polling Flow"
-        L[🔄 Client GET /documents/{uuid}/] --> M[🔍 Query Redis]
+        L[🔄 Client GET /documents/uuid/] --> M[🔍 Query Redis]
         M --> N{Status?}
         N -->|PENDING| O[📈 Return Progress]
         N -->|SUCCESS| P[📄 Return Summary]
@@ -190,7 +190,7 @@ flowchart TD
     end
     
     subgraph "Data Storage"
-        R[(🗄️ Redis Hash Structure<br/>document:{uuid})]
+        R[(🗄️ Redis Hash Structure<br/>document:uuid)]
         S[📋 Fields:<br/>• status<br/>• name<br/>• URL<br/>• summary<br/>• data_progress]
     end
     
@@ -225,41 +225,41 @@ sequenceDiagram
     Note over Client,Ollama: Document Submission & Processing Workflow
     
     %% Initial submission
-    Client->>+FastAPI: POST /documents/<br/>{name, URL}
+    Client->>+FastAPI: POST /documents/<br/>name, URL
     FastAPI->>FastAPI: Generate UUID
-    FastAPI->>+Redis: HSET document:{uuid}<br/>{status: PENDING, progress: 0.0}
+    FastAPI->>+Redis: HSET document:uuid<br/>status: PENDING, progress: 0.0
     Redis-->>-FastAPI: OK
-    FastAPI-->>-Client: 202 Accepted<br/>{document_uuid, status: PENDING}
+    FastAPI-->>-Client: 202 Accepted<br/>document_uuid, status: PENDING
     
     Note over FastAPI: Background Task Starts
     
     %% Background processing
-    FastAPI->>+WebContent: GET {URL}<br/>User-Agent: Mozilla/5.0...
+    FastAPI->>+WebContent: GET URL<br/>User-Agent: Mozilla/5.0...
     WebContent-->>-FastAPI: HTML Content
-    FastAPI->>+Redis: HSET document:{uuid}<br/>{progress: 0.25}
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.25
     Redis-->>-FastAPI: OK
     
     FastAPI->>FastAPI: Extract readable text<br/>from HTML
-    FastAPI->>+Redis: HSET document:{uuid}<br/>{progress: 0.50}
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.50
     Redis-->>-FastAPI: OK
     
-    FastAPI->>+Ollama: POST /api/generate<br/>{model: gemma3:1b, prompt}
+    FastAPI->>+Ollama: POST /api/generate<br/>model: gemma3:1b, prompt
     Ollama-->>-FastAPI: Streaming Summary
-    FastAPI->>+Redis: HSET document:{uuid}<br/>{progress: 0.75}
+    FastAPI->>+Redis: HSET document:uuid<br/>progress: 0.75
     Redis-->>-FastAPI: OK
     
     FastAPI->>FastAPI: Finalize summary text
-    FastAPI->>+Redis: HSET document:{uuid}<br/>{status: SUCCESS, summary, progress: 1.0}
+    FastAPI->>+Redis: HSET document:uuid<br/>status: SUCCESS, summary, progress: 1.0
     Redis-->>-FastAPI: OK
     
     Note over Client,Ollama: Client Polling for Results
     
     %% Polling sequence
     loop Polling Loop
-        Client->>+FastAPI: GET /documents/{uuid}/
-        FastAPI->>+Redis: HGETALL document:{uuid}
+        Client->>+FastAPI: GET /documents/uuid/
+        FastAPI->>+Redis: HGETALL document:uuid
         Redis-->>-FastAPI: Document Data
-        FastAPI-->>-Client: Document Status<br/>{status, progress, summary}
+        FastAPI-->>-Client: Document Status<br/>status, progress, summary
         
         alt Status = PENDING
             Note over Client: Wait and retry
@@ -273,7 +273,7 @@ sequenceDiagram
     Note over Client,Ollama: Error Handling
     
     alt Network/Processing Error
-        FastAPI->>+Redis: HSET document:{uuid}<br/>{status: FAILED, progress: 1.0}
+        FastAPI->>+Redis: HSET document:uuid<br/>status: FAILED, progress: 1.0
         Redis-->>-FastAPI: OK
     end
 ```
